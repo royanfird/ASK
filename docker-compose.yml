@@ -1,0 +1,135 @@
+version: '3.9'  # Versi Docker Compose yang digunakan
+
+services:
+  postgres:
+    image: postgres:latest  # Gambar Docker PostgreSQL versi terbaru
+    container_name: postgres_db  # Nama kontainer PostgreSQL
+    environment:
+      POSTGRES_USER: admin  # Nama pengguna default PostgreSQL
+      POSTGRES_PASSWORD: admin123  # Kata sandi pengguna PostgreSQL
+      POSTGRES_DB: sampledb  # Nama database default PostgreSQL
+    ports:
+      - "5432:5432"  # Memetakan port PostgreSQL dari kontainer ke host
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Volume untuk data yang persisten
+    networks:
+      - backend_network  # Menyambungkan ke jaringan backend
+    restart: always  # Konfigurasi restart otomatis
+    logging:
+      driver: "json-file"  # Driver logging menggunakan format JSON
+      options:
+        max-size: "10m"  # Ukuran maksimum log
+        max-file: "3"  # Maksimum jumlah file log
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "admin"]  # Perintah untuk mengecek status PostgreSQL
+      interval: 30s  # Interval pengecekan
+      retries: 3  # Jumlah percobaan jika gagal
+      start_period: 5s  # Waktu tunggu sebelum pengecekan pertama
+      timeout: 5s  # Batas waktu untuk setiap pengecekan
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    configs:
+      - postgres_conf
+
+  pgadmin:
+    image: dpage/pgadmin4:latest  # Gambar Docker pgAdmin versi terbaru
+    container_name: pgadmin  # Nama kontainer pgAdmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com  # Email default untuk login pgAdmin
+      PGADMIN_DEFAULT_PASSWORD: admin123  # Kata sandi default untuk pgAdmin
+    ports:
+      - "5050:80"  # Memetakan port pgAdmin dari kontainer ke host
+    depends_on:
+      - postgres  # Menentukan bahwa pgAdmin bergantung pada PostgreSQL
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin  # Volume untuk data pgAdmin yang persisten
+    networks:
+      - frontend_network  # Menghubungkan ke jaringan frontend
+    restart: always  # Konfigurasi restart otomatis
+    logging:
+      driver: "json-file"  # Driver logging menggunakan format JSON
+      options:
+        max-size: "10m"  # Ukuran maksimum log
+        max-file: "3"  # Maksimum jumlah file log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]  # Perintah untuk mengecek status pgAdmin
+      interval: 30s  # Interval pengecekan
+      retries: 3  # Jumlah percobaan jika gagal
+      start_period: 5s  # Waktu tunggu sebelum pengecekan pertama
+      timeout: 5s  # Batas waktu untuk setiap pengecekan
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    configs:
+      - pgadmin_conf
+
+  nginx:
+    image: nginx:latest  # Gambar Docker Nginx versi terbaru
+    container_name: nginx_server  # Nama kontainer Nginx
+    ports:
+      - "8080:80"  # Memetakan port Nginx dari kontainer ke host
+    volumes:
+      - nginx_data:/var/log/nginx  # Volume untuk menyimpan log Nginx
+      - ./nginx/html:/usr/share/nginx/html:ro  # Memetakan file HTML dari host ke kontainer
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro  # Memetakan konfigurasi Nginx dari host ke kontainer
+    depends_on:
+      - postgres  # Menentukan bahwa Nginx bergantung pada PostgreSQL
+      - pgadmin  # Menentukan bahwa Nginx bergantung pada pgAdmin
+    networks:
+      - frontend_network  # Menghubungkan ke jaringan frontend
+    restart: always  # Konfigurasi restart otomatis
+    logging:
+      driver: "json-file"  # Driver logging menggunakan format JSON
+      options:
+        max-size: "10m"  # Ukuran maksimum log
+        max-file: "3"  # Maksimum jumlah file log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]  # Perintah untuk mengecek status Nginx
+      interval: 30s  # Interval pengecekan
+      retries: 3  # Jumlah percobaan jika gagal
+      start_period: 5s  # Waktu tunggu sebelum pengecekan pertama
+      timeout: 5s  # Batas waktu untuk setiap pengecekan
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    configs:
+      - nginx_conf
+
+volumes:
+  postgres_data:  # Volume untuk data PostgreSQL yang persisten
+  pgadmin_data:  # Volume untuk data pgAdmin yang persisten
+  nginx_data:  # Volume untuk data log Nginx
+
+networks:
+  frontend_network:
+    driver: bridge  # Menggunakan driver jaringan bridge untuk frontend
+    driver_opts:
+      com.docker.network.bridge.name: "frontend_br"  # Menentukan nama jaringan bridge untuk frontend
+  backend_network:
+    driver: bridge  # Menggunakan driver jaringan bridge untuk backend
+    driver_opts:
+      com.docker.network.bridge.name: "backend_br"  # Menentukan nama jaringan bridge untuk backend
+
+configs:
+  postgres_conf:
+    file: ./postgres/postgresql.conf  # Menentukan file konfigurasi untuk PostgreSQL
+  pgadmin_conf:
+    file: ./pgadmin/pgadmin.conf  # Menentukan file konfigurasi untuk pgAdmin
+  nginx_conf:
+    file: ./nginx/nginx.conf  # Menentukan file konfigurasi untuk Nginx
